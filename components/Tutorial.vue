@@ -18,20 +18,17 @@ function useDebounce(value, delay = 200) {
     }
   })
 }
-import { mapState, mapActions } from 'vuex'
 import axios from 'axios'
 export default {
   data() {
     return {
       weatherData: {},
       fiveDatsData: {},
+      api_key: '29b179e74ff420783249b39ebbffc009',
       search: useDebounce('ташкент', 1000),
     }
   },
 
-  computed: {
-    ...mapState(['say', 'Latitude', 'Longitude', 'api_key']),
-  },
   methods: {
     useDebounce(value, delay = 200) {
       let timeout
@@ -51,7 +48,6 @@ export default {
         }
       })
     },
-    ...mapActions('weatherModule', ['getData']),
     toggleTheme() {
       document.body.classList.toggle('dark-mode')
     },

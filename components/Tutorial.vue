@@ -1,16 +1,118 @@
-<!-- Please remove this file from your project -->
-<script setup>
-import { onMounted } from "vue";
-import { useStore } from "vuex";
+<script>
+import { customRef } from 'vue'
+function useDebounce(value, delay = 200) {
+  let timeout
+  return customRef((track, trigger) => {
+    return {
+      get() {
+        track()
+        return value
+      },
+      set(newValue) {
+        clearTimeout(timeout)
+        timeout = setTimeout(() => {
+          value = newValue
+          trigger()
+        }, delay)
+      },
+    }
+  })
+}
+import { mapState, mapActions } from 'vuex'
+import axios from 'axios'
+export default {
+  data() {
+    return {
+      weatherData: {},
+      fiveDatsData: {},
+      search: useDebounce('ташкент', 1000),
+    }
+  },
 
-const toggleTheme = () => {
-  document.body.classList.toggle("dark-mode");
-};
-onMounted(() => {
-  const store = useStore(); // useStore should now correctly access the Vuex store
-  // say = computed(() => store.state);
-  console.log(111, store);
-});
+  computed: {
+    ...mapState(['say', 'Latitude', 'Longitude', 'api_key']),
+  },
+  methods: {
+    useDebounce(value, delay = 200) {
+      let timeout
+      return customRef((track, trigger) => {
+        return {
+          get() {
+            track()
+            return value
+          },
+          set(newValue) {
+            clearTimeout(timeout)
+            timeout = setTimeout(() => {
+              value = newValue
+              trigger()
+            }, delay)
+          },
+        }
+      })
+    },
+    ...mapActions('weatherModule', ['getData']),
+    toggleTheme() {
+      document.body.classList.toggle('dark-mode')
+    },
+    timeDate(val) {
+      const dtMilliseconds = val * 1000
+      const dtDate = new Date(dtMilliseconds)
+      const hours = String(dtDate.getHours()).padStart(2, '0')
+      const minutes = String(dtDate.getMinutes()).padStart(2, '0')
+      const output = `${hours}:${minutes}`
+      return output
+    },
+    async getData() {
+      await axios
+        .get(
+          `https://api.openweathermap.org/data/2.5/weather?q=${this.search}&appid=${this.api_key}&exclude=minutely&lang=ru&units=metric`
+        )
+        .then((res) => {
+          this.weatherData = res.data
+        })
+
+      await axios
+        .get(
+          `https://api.openweathermap.org/data/2.5/forecast?lat=${this.weatherData?.coord?.lat}&lon=${this.weatherData?.coord?.lon}&appid=${this.api_key}&cnt=4&lang=ru&units=metric`
+        )
+        .then((res) => {
+          this.fiveDatsData = res.data
+        })
+    },
+    linkIcon(val) {
+      return `https://openweathermap.org/img/wn/${val}.png`
+    },
+    getWeek(val) {
+      const timestampMilliseconds = val * 1000
+      const dateObject = new Date(timestampMilliseconds)
+      const formattedDateString = dateObject.toLocaleDateString('ru-RU', {
+        weekday: 'long',
+      })
+      return formattedDateString
+    },
+    getDate(val) {
+      const timestampMilliseconds = val * 1000
+      const dateObject = new Date(timestampMilliseconds)
+      const formattedDateString = dateObject.toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+      })
+      const hours = dateObject.getHours()
+      const minutes = dateObject.getMinutes()
+      return `${formattedDateString} , ${hours}:${minutes} `
+    },
+  },
+  watch: {
+    search(newValue, oldValue) {
+      this.getData()
+    },
+  },
+  mounted() {
+    this.getData()
+    console.log(new Date())
+  },
+}
 </script>
 <template>
   <div class="mainMode">
@@ -24,20 +126,33 @@ onMounted(() => {
           <button @click="toggleTheme" class="mode">
             <img src="../static/img/mode.svg" alt="" />
           </button>
-          <button class="choosecity">Выбрать город</button>
+          <input
+            class="choosecity"
+            v-model="search"
+            type="text"
+            placeholder="Выбрать город"
+          />
         </div>
       </div>
       <div class="bodyPart">
         <div class="todayWeather">
           <div class="todayWeatherChild">
             <div class="todayWeatherTop">
-              <p class="temperature">20°</p>
+              <p class="temperature">
+                {{
+                  weatherData?.main?.temp
+                    ? Math.round(weatherData?.main?.temp)
+                    : ''
+                }}°
+              </p>
               <p class="today">Сегодня</p>
             </div>
-            <img src="../static/img/sunshine.svg" alt="" />
+            <img :src="linkIcon(weatherData?.weather?.[0]?.icon)" alt="" />
           </div>
-          <div class="time">Время : 21:54</div>
-          <div class="city">Город: Санкт-Петербург</div>
+          <div class="time">
+            Время : {{ weatherData?.dt ? timeDate(weatherData.dt) : '' }}
+          </div>
+          <div class="city">Город: {{ weatherData?.name }}</div>
         </div>
         <div class="todayAddingNews">
           <div class="ListAddingNews">
@@ -45,41 +160,63 @@ onMounted(() => {
               <div class="listImg">
                 <img src="../static/img/tempreture.svg" alt="" />
               </div>
-              <div class="listName">Ветер</div>
-              <div class="listValue">3 м/с юго-запад - легкий ветер</div>
+              <div class="listName">Температура</div>
+              <div class="listValue">
+                {{ weatherData?.main?.temp }}° - ощущается как
+                {{ weatherData?.main?.feels_like }}°
+              </div>
             </div>
             <div class="list">
               <div class="listImg">
-                <img src="../static/img/tempreture.svg" alt="" />
+                <img src="../static/img/pressure.svg" alt="" />
               </div>
-              <div class="listName">Ветер</div>
-              <div class="listValue">3 м/с юго-запад - легкий ветер</div>
+              <div class="listName">Давление</div>
+              <div class="listValue">{{ weatherData?.main?.pressure }} гПа</div>
             </div>
             <div class="list">
               <div class="listImg">
-                <img src="../static/img/tempreture.svg" alt="" />
+                <img src="../static/img/precipitation.svg" alt="" />
               </div>
-              <div class="listName">Ветер</div>
-              <div class="listValue">3 м/с юго-запад - легкий ветер</div>
+              <div class="listName">Осадки</div>
+              <div class="listValue">
+                {{
+                  weatherData?.clouds?.all
+                    ? `${weatherData?.clouds?.all}%`
+                    : 'Без осадков'
+                }}
+              </div>
             </div>
             <div class="list">
               <div class="listImg">
-                <img src="../static/img/tempreture.svg" alt="" />
+                <img src="../static/img/wind.svg" alt="" />
               </div>
               <div class="listName">Ветер</div>
-              <div class="listValue">3 м/с юго-запад - легкий ветер</div>
+              <div class="listValue">{{ weatherData?.wind?.speed }} м/с</div>
             </div>
           </div>
         </div>
       </div>
-      <div class="dayByWeek">
-        <div v-for="item in 7" :key="item" class="weatherList">
-          <div class="day">Сегодня</div>
-          <div class="date">28 авг</div>
-          <div class="image"><img src="" alt="" /></div>
-          <div class="firstTemprature">+18°</div>
-          <div class="secondTemprature">+15°</div>
-          <div class="weatherHow">Облачно</div>
+      <div v-if="fiveDatsData?.list?.length > 0" class="dayByWeek">
+        <div v-for="item in fiveDatsData?.list" :key="item" class="weatherList">
+          <div class="day">{{ getWeek(item?.dt) }}</div>
+          <div class="date">{{ getDate(item?.dt) }}</div>
+          <div class="image">
+            <img
+              style="height: 48px; width: 48px"
+              :src="linkIcon(item?.weather?.[0]?.icon)"
+              alt=""
+            />
+          </div>
+          <div class="firstTemprature">
+            {{ item?.main?.temp ? Math.round(item?.main?.temp) : '' }} °
+          </div>
+          <div class="secondTemprature">
+            {{
+              item?.main?.feels_like ? Math.floor(item?.main?.feels_like) : ''
+            }}
+            °
+          </div>
+          <div class="weatherHow">{{ item?.weather?.[0]?.description }}</div>
         </div>
       </div>
     </div>
@@ -109,7 +246,7 @@ onMounted(() => {
         align-items: center;
         h1 {
           margin-left: 20px;
-          font-family: "m-bold";
+          font-family: 'm-bold';
           font-weight: 700;
           font-size: 25px;
           text-transform: uppercase;
@@ -140,7 +277,7 @@ onMounted(() => {
           padding: 9px 20px;
           display: flex;
           justify-content: center;
-          font-family: "m-medium";
+          font-family: 'm-medium';
           font-weight: 500;
           font-size: 16px;
           color: #000;
@@ -177,14 +314,14 @@ onMounted(() => {
             flex-direction: column;
             align-items: start;
             .temperature {
-              font-family: "m-medium";
+              font-family: 'm-medium';
               font-weight: 500;
               font-size: 96px;
               color: #4793ff;
               margin: 0;
             }
             .today {
-              font-family: "m-regular";
+              font-family: 'm-regular';
               font-weight: 400;
               font-size: 40px;
               color: #000;
@@ -193,14 +330,14 @@ onMounted(() => {
           }
         }
         .time {
-          font-family: "m-regular";
+          font-family: 'm-regular';
           font-weight: 400;
           font-size: 25px;
           color: #939cb0;
           margin-bottom: 14px;
         }
         .city {
-          font-family: "m-regular";
+          font-family: 'm-regular';
           font-weight: 400;
           font-size: 25px;
           color: #939cb0;
@@ -212,7 +349,7 @@ onMounted(() => {
         border-radius: 20px;
         box-shadow: 2px 5px 25px -3px rgba(180, 180, 180, 0.25);
         background: #fff;
-        background-image: url("../static/img/CloudImage.png");
+        background-image: url('../static/img/CloudImage.png');
         background-position: right top;
         background-repeat: no-repeat;
         .ListAddingNews {
@@ -237,7 +374,7 @@ onMounted(() => {
               margin-right: 20px;
             }
             .listName {
-              font-family: "m-regular";
+              font-family: 'm-regular';
               font-weight: 400;
               font-size: 14px;
               text-align: right;
@@ -245,7 +382,7 @@ onMounted(() => {
               margin-right: 20px;
             }
             .listValue {
-              font-family: "m-regular";
+              font-family: 'm-regular';
               font-weight: 400;
               font-size: 14px;
               color: #000;
@@ -266,13 +403,15 @@ onMounted(() => {
         padding: 11px;
         background: rgba(71, 147, 255, 0.2);
         .day {
-          font-family: "m-medium";
+          font-family: 'm-medium';
           font-weight: 500;
+          text-transform: capitalize;
           font-size: 18px;
           color: #000;
         }
         .date {
-          font-family: "m-regular";
+          font-family: 'm-regular';
+          text-transform: capitalize;
           font-weight: 400;
           font-size: 14px;
           color: #939cb0;
@@ -282,19 +421,20 @@ onMounted(() => {
           height: 48px;
         }
         .firstTemprature {
-          font-family: "m-medium";
+          font-family: 'm-medium';
           font-weight: 500;
           font-size: 18px;
           color: #000;
         }
         .secondTemprature {
-          font-family: "m-regular";
+          font-family: 'm-regular';
           font-weight: 400;
           font-size: 13px;
           color: #939cb0;
         }
         .weatherHow {
-          font-family: "m-regular";
+          font-family: 'm-regular';
+          text-transform: capitalize;
           font-weight: 400;
           font-size: 13px;
           color: #939cb0;
